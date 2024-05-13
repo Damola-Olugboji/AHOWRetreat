@@ -26,6 +26,9 @@ def get_latest_file(directory):
         return None
     
 def pull_raw_data():
+    """
+        Logs into the AHOW Website pulls the latest csv into the "pulled" dir
+    """
     wp_email = os.getenv("AHOWFC_EMAIL") 
     wp_pass = os.getenv("AHOWFC_PASSWORD")
     save_dir = r"/Users/damolaolugboji/Desktop/code/AhowIT/retreat/pulled/"
@@ -56,12 +59,18 @@ def pull_raw_data():
     return latest_file
     
 def get_current_date():
+    """
+    Helper function to get current date
+    """
     from datetime import datetime
     current_datetime = datetime.now()
     date_string = current_datetime.strftime('%Y-%m-%d')
     return date_string
     
 def map_age_to_bucket(age):
+    """
+    Maps ages to buckets
+    """
     age_buckets = [
         (50, float('inf'), "50+"),
         (36, 49, "36-49"),
@@ -80,6 +89,9 @@ def map_age_to_bucket(age):
     return age
 
 def parse_adult_attendees_string(input_string):
+    """
+    Parses adult attendes fields into dictionaries
+    """
     people = []
     entries = input_string.split("\n")
     
@@ -96,6 +108,10 @@ def parse_adult_attendees_string(input_string):
     return people
         
 def extract_values_from_csv(csv_path):
+    """
+        Extracts values that we want to keep 
+        keys_to_keep = ['Registered Email','First Name', 'Last Name', 'Phone', 'Age', "Room Number", "Breakout Session","T-shirt", "Remaining Balance"]
+    """
     print("Extracting values from CSV")
     individuals = []
     registrant_count = 0
@@ -122,6 +138,9 @@ def extract_values_from_csv(csv_path):
     return filtered_people
     
 def create_formatted_csv(individuals, filename):
+    """
+        Creates the formatted CSV and stores in "formatted" 
+    """
     base_path = "./formatted/"
     save_path = f"{base_path}{filename}.csv"
     with open(save_path, mode='w', newline='') as file:
@@ -133,6 +152,9 @@ def create_formatted_csv(individuals, filename):
     return save_path
 
 def upload_to_sheets(csv_path):
+    """
+        uploads the formatted csv to google sheets, highlighting the first occurence of the PK, bolding the header
+    """
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('./credentials.json', scope)
     client = gspread.authorize(creds)
