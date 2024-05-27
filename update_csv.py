@@ -8,6 +8,7 @@ from playwright.sync_api import sync_playwright
 from dotenv import load_dotenv
 import os
 import glob
+import time
 
 load_dotenv()
 """
@@ -71,6 +72,9 @@ def map_age_to_bucket(age):
     """
     Maps ages to buckets
     """
+    if age == "NA":
+        return "NA"
+    age = int(age)
     age_buckets = [
         (50, float('inf'), "50+"),
         (36, 49, "36-49"),
@@ -88,10 +92,12 @@ def map_age_to_bucket(age):
             return bucket
     return age
 
-def parse_adult_attendees_string(input_string):
+def parse_attendees_string(input_string):
     """
     Parses adult attendes fields into dictionaries
     """
+    if input_string == None:
+        return []
     people = []
     entries = input_string.split("\n")
     
@@ -115,23 +121,37 @@ def extract_values_from_csv(csv_path):
     print("Extracting values from CSV")
     individuals = []
     registrant_count = 0
-    with open(csv_path, newline='') as csvfile:
+    with open(csv_path, newline='\n') as csvfile:
         reader = csv.reader(csvfile)
         next(reader)
         for row in reader:
+            registrant_count += 1 
             registered_email = row[0]
             remaining_balance = float(row[9]) if row[9] != "" else 0
             adult_attendees = row[13] 
-            people = parse_adult_attendees_string(adult_attendees)
+            child_attendees = row[14] if row[14] != "" else None
+            people = parse_attendees_string(adult_attendees)
+            children = parse_attendees_string(child_attendees) 
             for person in people:
                 person["Remaining Balance"] = remaining_balance
                 person["Registered Email"] = registered_email
-                person["Age"] = map_age_to_bucket(int(person["Age"])) if "-" not in person["Age"] and "+" not in person["Age"] else person["Age"]
+                person["Age"] = map_age_to_bucket(person["Age"]) if "-" not in person["Age"] and "+" not in person["Age"] else person["Age"]
                 person["Breakout Session"] = ""
                 person["Room Number"] = ""
+                person["isChild"] = "no"
+            
+            for child in children:
+                child["Remaining Balance"] = remaining_balance
+                child["Registered Email"] = registered_email
+                child["Age"] = map_age_to_bucket(child["Age"]) if "-" not in child["Age"] and "+" not in child["Age"] else child["Age"]
+                child["Breakout Session"] = ""
+                child["Room Number"] = ""
+                child["isChild"] = "yes"
+                
             individuals.extend(people)
-            registrant_count += 1
-    keys_to_keep = ['Registered Email','First Name', 'Last Name', 'Phone', 'Age', "Room Number", "Breakout Session","T-shirt", "Remaining Balance"]
+            individuals.extend(children)
+            
+    keys_to_keep = ['Registered Email','First Name', 'Last Name', 'Phone', 'Age', "Room Number", "Breakout Session","T-shirt", "Remaining Balance", "isChild"]
     filtered_people = [{key: person[key] for key in keys_to_keep if key in person} for person in individuals]
     print(f"Parsed through csv - found {len(individuals)} attendees from {registrant_count} registrants")
 
@@ -158,7 +178,7 @@ def upload_to_sheets(csv_path):
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name('./credentials.json', scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_key("1x3IogKi4g3DlcJB4-DvukI8Y_YdOXtxZr963Ts2QzUw").worksheet("formatted")
+    sheet = client.open_by_key("1x3IogKi4g3DlcJB4-DvukI8Y_YdOXtxZr963Ts2QzUw").worksheet("Retreat Registration Data")
     sheet.clear()
     with open(csv_path, newline='') as file:
         csv_reader = csv.reader(file)
@@ -170,8 +190,12 @@ def upload_to_sheets(csv_path):
     cell_range = gspread.utils.rowcol_to_a1(1, 1) + ':' + gspread.utils.rowcol_to_a1(len(data), len(data[0]))
     sheet.update(cell_range, data)
     
-    fmt_range = 'A1:' + chr(64 + len(data[0])) + '1'
-    sheet.format(fmt_range, {'textFormat': {'bold': True}})
+    fmt_range = 'Ac1:' + chr(64 + len(data[0])) + '1'
+    header_format = {
+        'textFormat': {'bold': True, 'foregroundColor': {'red': 1, 'green': 1, 'blue': 1}},
+        'backgroundColor': {'red': 173/255, 'green': 216/255, 'blue': 230/255}
+    }
+    sheet.format(fmt_range, header_format)
     
     email_column = sheet.col_values(1)
     light_gray = {'red': 211/255, 'green': 211/255, 'blue': 211/255}
@@ -182,6 +206,7 @@ def upload_to_sheets(csv_path):
             # Highlight this row
             highlight_range = f'A{i}:' + chr(64 + len(data[0])) + str(i)
             sheet.format(highlight_range, {'backgroundColor': light_gray})
+            time.sleep(5)
     print("Successfully uploaded formatted data to Google Sheets")
 
     
